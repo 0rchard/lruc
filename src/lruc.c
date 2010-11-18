@@ -1,28 +1,28 @@
-#include "lruc.h"
+#include "lruc_imp.h"
 #include <stdlib.h>
 #include <string.h>
 
-void* _lru_alloc_fun(void* context, unsigned int size){
+void* _lrucalloc_fun(void* context, unsigned int size){
     return calloc(1, size);
 }
 
-void _lru_free_fun(void* context, void* p){
+void _lrucfree_fun(void* context, void* p){
     return free(p);
 }
 
-static struct lru_alloc_st _lru_alloc_def={
-    NULL, _lru_alloc_fun, _lru_free_fun};
+static struct lruc_alloc_st _lrucalloc_def={
+    NULL, _lrucalloc_fun, _lrucfree_fun};
 
 #ifdef _g_LRUC_DEBUG_
 
-struct lru_margin_str{
+struct lrucmargin_str{
     int margin1;
     int margin2;
 };
 
-typedef struct lru_margin_str* lru_margin_t;
+typedef struct lrucmargin_str* lrucmargin_t;
 
-int lruc_margin_check(lru_margin_t margin){
+int lruc_margin_check(lrucmargin_t margin){
     if(margin->margin1==DEBUG_MARGIN1 && 
             margin->margin2==DEBUG_MARGIN1){
         return 0;
@@ -30,12 +30,12 @@ int lruc_margin_check(lru_margin_t margin){
     return 1;
 }
 
-void lruc_margin_init(lru_margin_t margin){
+void lruc_margin_init(lrucmargin_t margin){
     margin->margin1=DEBUG_MARGIN1;
     margin->margin2=DEBUG_MARGIN2;
 }
 
-void lruc_debug_check(lru_t lru){
+void lruc_debug_check(lruc_t lru){
     //assert(lru);
     return;
 }
@@ -44,17 +44,17 @@ void lruc_debug_check(lru_t lru){
 
 
 //
-lru_t lruc_new(lru_alloc_t alloc, hash_f *hash, comp_f *comp, destory_f *destory, 
+lruc_t lruc_new(lruc_alloc_t alloc, hash_f *hash, comp_f *comp, destory_f *destory, 
         unsigned int ksize, unsigned int vsize, unsigned int bsize, unsigned int max){
 
-    lru_t lru;
+    lruc_t lru;
     void * mem = NULL;
-    unsigned int size = sizeof(struct lru_st);
+    unsigned int size = sizeof(struct lruc_st);
 
-    size += sizeof(struct lru_node_list_st) * bsize;
+    size += sizeof(struct lruc_node_list_st) * bsize;
 
     if(alloc==NULL){
-        alloc = &_lru_alloc_def;
+        alloc = &_lrucalloc_def;
     }
 
     mem = alloc->alloc(alloc->context, size);
@@ -72,15 +72,15 @@ lru_t lruc_new(lru_alloc_t alloc, hash_f *hash, comp_f *comp, destory_f *destory
 
     lru->ksize = ksize;
     lru->vsize = vsize;
-    lru->nsize = ksize + vsize + sizeof(struct lru_node_st);
+    lru->nsize = ksize + vsize + sizeof(struct lruc_node_st);
 
-    lru->koffset = sizeof(struct lru_node_st);
+    lru->koffset = sizeof(struct lruc_node_st);
     lru->voffset = lru->koffset + lru->ksize;
 
     lru->max = max;
     lru->bsize = bsize;
 
-    lru->bucket = (lru_node_list_t)(((char*)lru) + sizeof(struct lru_st));
+    lru->bucket = (lruc_node_list_t)(((char*)lru) + sizeof(struct lruc_st));
 
     TAILQ_INIT(&lru->fifo);
 
@@ -92,22 +92,22 @@ lru_t lruc_new(lru_alloc_t alloc, hash_f *hash, comp_f *comp, destory_f *destory
     return lru;
 }
 
-void lruc_set_cookie(lru_t lru, void* cookie){
+void lruc_set_cookie(lruc_t lru, void* cookie){
     G_LRUC_DEBUG_CHECK(lru);
    
     lru->cookie = cookie;
 }
 
-void lruc_set_max_size(lru_t lru, int max){
+void lruc_set_max_size(lruc_t lru, int max){
     G_LRUC_DEBUG_CHECK(lru);
     
     lru->max = max;
 }
 
-void lruc_free(lru_t lru){
+void lruc_free(lruc_t lru){
     G_LRUC_DEBUG_CHECK(lru);
 
-    lru_node_t node;
+    lruc_node_t node;
 
     while(!TAILQ_EMPTY(&lru->fifo)){
         node = TAILQ_FIRST(&lru->fifo);
@@ -119,14 +119,14 @@ void lruc_free(lru_t lru){
 }
 
 //create a new node in heap
-lru_node_t lruc_alloc_node(lru_t lru){
+lruc_node_t lruc_alloc_node(lruc_t lru){
     G_LRUC_DEBUG_CHECK(lru);
 
     return lru->alloc->alloc(lru->alloc->context, lru->nsize);
 }
 
 //which never insert into lru
-void lruc_free_node(lru_t lru, lru_node_t node){
+void lruc_free_node(lruc_t lru, lruc_node_t node){
     G_LRUC_DEBUG_CHECK(lru);
     G_LRUC_DEBUG_CHECK_NODE(lru, node);
 
@@ -134,13 +134,13 @@ void lruc_free_node(lru_t lru, lru_node_t node){
 }
 
 //interate
-lru_node_t lruc_walk(lru_t lru, walkcb_f *walkcb){
+lruc_node_t lruc_walk(lruc_t lru, walkcb_f *walkcb){
     G_LRUC_DEBUG_CHECK(lru);
 
     return NULL;
 }
 
-int lruc_find_below(lru_t lru, void* key, void* value, lru_node_t* node){
+int lruc_find_below(lruc_t lru, void* key, void* value, lruc_node_t* node){
 
     return 0;
 }
@@ -154,11 +154,11 @@ int lruc_find_below(lru_t lru, void* key, void* value, lru_node_t* node){
 #define LRUC_NODE_TO_HEADER(lru, node)
 
 //add a node into lru
-int lruc_insert(lru_t lru, void* key, void*  value){
+int lruc_insert(lruc_t lru, void* key, void*  value){
     G_LRUC_DEBUG_CHECK(lru);
 
-    lru_node_t onode = NULL;
-    lru_node_t nnode= NULL;
+    lruc_node_t onode = NULL;
+    lruc_node_t nnode= NULL;
 
     int index = 0;
 
@@ -194,12 +194,12 @@ int lruc_insert(lru_t lru, void* key, void*  value){
     //insert in to fifo
 }
 
-int lruc_insert_node(lru_t lru, lru_node_t node){
+int lruc_insert_node(lruc_t lru, lruc_node_t node){
     G_LRUC_DEBUG_CHECK(lru);
     G_LRUC_DEBUG_CHECK_NODE(lru, node);
 
-    lru_node_t onode = NULL;
-    lru_node_t nnode= NULL;
+    lruc_node_t onode = NULL;
+    lruc_node_t nnode= NULL;
 
     int index = 0;
 
@@ -212,11 +212,11 @@ int lruc_insert_node(lru_t lru, lru_node_t node){
 }
 
 //find in lru
-lru_node_t lruc_find(lru_t lru, void* key){
+lruc_node_t lruc_find(lruc_t lru, void* key){
     G_LRUC_DEBUG_CHECK(lru);
 
-    lru_node_t onode = NULL;
-    lru_node_t nnode= NULL;
+    lruc_node_t onode = NULL;
+    lruc_node_t nnode= NULL;
 
     int index = 0;
     int ret = lruc_find_below(lru, key, &index, &onode);
@@ -229,16 +229,16 @@ lru_node_t lruc_find(lru_t lru, void* key){
 }
 
 //should not be call in walk callback
-void lruc_del(lru_t lru, void* key){
+void lruc_del(lruc_t lru, void* key){
     G_LRUC_DEBUG_CHECK(lru);
 
-    lru_node_t onode = NULL;
-    lru_node_t nnode= NULL;
+    lruc_node_t onode = NULL;
+    lruc_node_t nnode= NULL;
 
     int index = 0;
     int ret = lruc_find_below(lru, key, &index, &onode);
 
-    lru_node_t node = lruc_find(lru, key);
+    lruc_node_t node = lruc_find(lru, key);
 
     if(node){
         lruc_del_node(lru, node);
@@ -246,7 +246,7 @@ void lruc_del(lru_t lru, void* key){
     }
 }
 
-void lruc_del_node(lru_t lru, lru_node_t node){
+void lruc_del_node(lruc_t lru, lruc_node_t node){
     G_LRUC_DEBUG_CHECK(lru);
 
     //release in hash table
@@ -260,7 +260,7 @@ void lruc_del_node(lru_t lru, lru_node_t node){
 
 #ifdef _g_LRUC_INFO__
 //
-lru_info_t lru_info(lru_t lru){
+lruc_info_t lruc_info(lruc_t lru){
     return &lru->info;
 }
 #endif
