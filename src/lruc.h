@@ -4,31 +4,36 @@
 #define _g_LRUC_DEBUG__ 0
 #define _g_LRUC_INFO__ 0
 
-//#include "./compat/sys/queue.h"
-
-
 //
 struct lruc_node_st;
 typedef struct lruc_node_st *lruc_node_t;
-
 
 struct lruc_st;
 typedef struct lruc_st* lruc_t;
 
 typedef unsigned int (hash_f)(void*);
-typedef void (destory_f)(struct lruc_node_st *node);
+typedef void (destroy_f)(void* key, void* value);
 typedef int (comp_f)(void *arg1, void *arg2);
 
 typedef void* (alloc_f)(void *context, unsigned int size);
 typedef void (free_f)(void *context, void *);
 
 //
+void* lruc_node_key(lruc_t lruc, lruc_node_t node);
+void* lruc_node_value(lruc_t lruc, lruc_node_t node);
+
+#define G_LRUC_NODE_KEY(lruc, node, type) \
+    ((type)(lruc_node_key(lruc, node)))
+
+#define G_LRUC_NODE_VALUE(lruc, node, type) \
+    ((type)(lruc_node_value(lruc, node)))
+
+//
 //--------------------------------------------
 #define LRU_IT_NEXT 0x0
 #define LRU_IT_BREAK 0x1
 
-#define LRU_IT_DEL 0x10
-typedef int (walkcb_f)(struct lruc_node_st *node, void* key, void* value);
+typedef int (walkcb_f)(lruc_t lruc, lruc_node_t node, void* key, void* value);
 
 
 //--------------------------------------------
@@ -58,7 +63,7 @@ typedef struct lruc_alloc_st *lruc_alloc_t;
 //--------------------------------------------
 lruc_t lruc_new(lruc_alloc_t alloc, 
         hash_f *hash, comp_f *comp, 
-        destory_f *destory, 
+        destroy_f *destroy, 
         unsigned int ksize, unsigned int vsize, 
         unsigned int bsize, unsigned int max);
 
@@ -82,15 +87,13 @@ int lruc_insert(lruc_t lru, void* key, void*  value);
 int lruc_insert_node(lruc_t lru, lruc_node_t node);
 
 //find in lru
-lruc_node_t lruc_find(lruc_t lru, void* key);
+void* lruc_find(lruc_t lru, void* key);
+lruc_node_t lruc_find_node(lruc_t lru, void* key);
 
 //should not be call in walk callback
-void lruc_del(lruc_t lru, void* key);
-void lruc_del_node(lruc_t lru, lruc_node_t node);
+int lruc_del(lruc_t lru, void* key);
+int lruc_del_node(lruc_t lru, lruc_node_t node);
 
-#ifdef _g_LRUC_INFO__
-//
 lruc_info_t lruc_info(lruc_t lru);
-#endif
 
 #endif //__g_LRUC_H__
