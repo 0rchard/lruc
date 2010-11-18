@@ -9,7 +9,7 @@
 
 struct lruc_node_st{
 #ifdef _g_LRUC_DEBUG_
-    lruc_t lru;
+    lruc_t lruc;
 #endif
     TAILQ_ENTRY(lruc_node_st) bucket_link;
     TAILQ_ENTRY(lruc_node_st) queue_link;
@@ -55,7 +55,7 @@ struct lruc_st{
 
     hash_f* hash;
     comp_f* comp;
-    destory_f* destory;
+    destroy_f* destroy;
 
     struct lruc_node_list_st* bucket;
     struct lruc_node_list_st fifo;
@@ -84,25 +84,26 @@ struct lruc_st{
 //--------------------------------------------
 //LRU_DEBUG_MARGIN
 #ifdef _g_LRUC_DEBUG_
-#define DEBUG_MARGIN1 0xF0CA
-#define DEBUG_MARGIN1 0x09E6
+    #define DEBUG_MARGIN1 0xF0CA
+    #define DEBUG_MARGIN1 0x09E6
 
-struct lruc_margin_str{
-    int margin1;
-    int margin2;
-};
+    struct lruc_margin_str{
+        int margin1;
+        int margin2;
+    };
 
-typedef struct lruc_margin_str* lruc_margin_t;
+    typedef struct lruc_margin_str* lruc_margin_t;
 
-int lruc_margin_check(lruc_margin_t margin);
-void lruc_margin_init(lruc_margin_t margin);
-void lruc_debug_check(lruc_t lru);
+    int lruc_margin_check(lruc_margin_t margin);
+    void lruc_margin_init(lruc_margin_t margin);
+    void lruc_debug_check(lruc_t lru);
 
-#define G_LRUC_DEBUG_CHECK(lru) lruc_debug_check(lru)
+    #define G_LRUC_DEBUG_CHECK(lru) lruc_debug_check(lru)
 
 #else
 
 #endif
 
+extern struct lruc_alloc_st _lruc_alloc_def;
 
 #endif //__g_LRUC_IMP_H__
