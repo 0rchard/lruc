@@ -3,24 +3,9 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define LRUC_NODE_KEY(lruc, node) \
-    (((char*)(node))+(lruc->koffset))
-
-#define LRUC_NODE_VALUE(lruc, node) \
-    (((char*)(node))+(lruc->voffset))
-
-#define LRUC_NODE_TOUCH(lruc, node) \
-    TAILQ_REMOVE(&lruc->fifo, node, queue_link); \
-    TAILQ_INSERT_HEAD(&lruc->fifo, node, queue_link);
-
-
-#define LRUC_HASH_INDEX(lruc, key) \
-    (lruc->hash(key)%lruc->bsize)
-
-
 void* lruc_node_key(lruc_t lruc, lruc_node_t node){
     LRUC_DEBUG_CHECK(lruc);
-    LRUC_DEBUG_CHECK_NODE(lruc);
+    LRUC_DEBUG_CHECK_NODE(lruc, node);
     
     return LRUC_NODE_KEY(lruc, node);
 }
@@ -28,7 +13,7 @@ void* lruc_node_key(lruc_t lruc, lruc_node_t node){
 
 void* lruc_node_value(lruc_t lruc, lruc_node_t node){
     LRUC_DEBUG_CHECK(lruc);
-    LRUC_DEBUG_CHECK_NODE(lruc);
+    LRUC_DEBUG_CHECK_NODE(lruc, node);
 
     return LRUC_NODE_VALUE(lruc, node);
 }
@@ -173,7 +158,7 @@ it_begin:
             ret = walkcb(lruc, node, LRUC_NODE_KEY(lruc, node), LRUC_NODE_VALUE(lruc, node));
 
             if(ret & 0x02){
-                int index = LRUC_HASH_INDEX(lruc, node);
+                int index = LRUC_HASH_INDEX(lruc, LRUC_NODE_KEY(lruc, node));
 
                 TAILQ_REMOVE(&(lruc->bucket[index]), node, bucket_link);
                 TAILQ_REMOVE(&(lruc->fifo), node, queue_link);
@@ -202,12 +187,11 @@ it_begin:
     return NULL;
 }
 
-int _lruc_lower_bound(lruc_t lruc, void* key, int* index, lruc_node_t* pnode){
+static int _lruc_lower_bound(lruc_t lruc, void* key, int* index, lruc_node_t* pnode){
     int ret;
     lruc_node_t node;
-    lruc_node_t prev=NULL;
 
-    *index = _lruc_hash_index(lruc, key);
+    *index = LRUC_HASH_INDEX(lruc, key);
 
     if(!TAILQ_EMPTY(&lruc->bucket[*index])){
         TAILQ_FOREACH(node, &lruc->bucket[*index], bucket_link){
@@ -215,12 +199,12 @@ int _lruc_lower_bound(lruc_t lruc, void* key, int* index, lruc_node_t* pnode){
 
             if(ret == 0){
                 *pnode = node;
+                break;
             }
             else if(ret < 0){
-                prev = node;
+                *pnode = node;
             }
             else{
-                *pnode = prev;
                 break;
             }
         }
@@ -238,9 +222,9 @@ int lruc_insert(lruc_t lruc, void* key, void*  value){
 
     int index = 0;
 
-    int ret = lruc_find_below(lruc, key, &index, &onode);
+    int ret = _lruc_lower_bound(lruc, key, &index, &onode);
 
-    if(ret == 0){
+    if(ret == 0 && onode){
         if(lruc->destroy){
             lruc->destroy(LRUC_NODE_KEY(lruc, onode), LRUC_NODE_VALUE(lruc, onode));
         }
@@ -266,6 +250,8 @@ int lruc_insert(lruc_t lruc, void* key, void*  value){
         if( nnode == NULL ){
             return 1;
         }
+
+        lruc->count ++;
     }
 
     memcpy(LRUC_NODE_KEY(lruc, nnode), key, lruc->ksize);
@@ -294,7 +280,7 @@ int lruc_insert_node(lruc_t lruc, lruc_node_t node){
 
     int ret = _lruc_lower_bound(lruc, LRUC_NODE_KEY(lruc, node), &index, &onode);
 
-    if(ret == 0){
+    if(ret == 0 && onode){
         if(lruc->destroy){
             lruc->destroy(LRUC_NODE_KEY(lruc, onode), LRUC_NODE_VALUE(lruc, onode));
         }
@@ -316,6 +302,9 @@ int lruc_insert_node(lruc_t lruc, lruc_node_t node){
 
         lruc->destroy(LRUC_NODE_KEY(lruc, nnode), LRUC_NODE_VALUE(lruc, nnode));
         lruc->alloc->free(lruc->alloc->context, nnode);
+    }
+    else{
+        lruc->count ++;
     }
 
     if(onode == NULL){
@@ -383,7 +372,7 @@ int lruc_del(lruc_t lruc, void* key){
     lruc_node_t node = NULL;
 
     int index = 0;
-    int ret = lruc_lower_bound(lruc, key, &index, &node);
+    int ret = _lruc_lower_bound(lruc, key, &index, &node);
 
     if(ret == 0){
         TAILQ_REMOVE(&(lruc->bucket[index]), node, bucket_link);
@@ -400,7 +389,7 @@ int lruc_del_node(lruc_t lruc, lruc_node_t node){
     LRUC_DEBUG_CHECK(lruc);
     LRUC_DEBUG_CHECK_NODE(lruc, node);
 
-    int index = _lruc_hash_index(lruc, LRUC_NODE_KEY(lruc, node));
+    int index = LRUC_HASH_INDEX(lruc, LRUC_NODE_KEY(lruc, node));
 
     TAILQ_REMOVE(&(lruc->bucket[index]), node, bucket_link);
     TAILQ_REMOVE(&lruc->fifo, node, queue_link);

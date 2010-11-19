@@ -7,6 +7,22 @@
 #include "lruc.h"
 #include "./compat/sys/queue.h"
 
+#define LRUC_NODE_KEY(lruc, node) \
+    (((char*)(node))+(lruc->koffset))
+
+#define LRUC_NODE_VALUE(lruc, node) \
+    (((char*)(node))+(lruc->voffset))
+
+#define LRUC_NODE_TOUCH(lruc, node) \
+    TAILQ_REMOVE(&lruc->fifo, node, queue_link); \
+    TAILQ_INSERT_HEAD(&lruc->fifo, node, queue_link);
+
+
+#define LRUC_HASH_INDEX(lruc, key) \
+    (lruc->hash(key)%lruc->bsize)
+
+
+
 struct lruc_node_st{
 #ifdef _g_LRUC_DEBUG_
     lruc_t lruc;
@@ -67,6 +83,7 @@ struct lruc_st{
 #endif
 };
 
+/*
 //--------------------------------------------
 //LRU_NODE_ACCESS_MACRO
 #define G_LRUC_KEY(lru, node, type) \
@@ -79,6 +96,8 @@ struct lruc_st{
 
 #define G_LRUC_COOKIE(lru, type) \
      ((type)(lru->cookie))
+
+*/
 
 
 //--------------------------------------------
@@ -105,5 +124,11 @@ struct lruc_st{
 #endif
 
 extern struct lruc_alloc_st _lruc_alloc_def;
+
+#define LRUC_DEBUG_CHECK(lruc) \
+    ;
+
+#define LRUC_DEBUG_CHECK_NODE(lruc, node) \
+    ;
 
 #endif //__g_LRUC_IMP_H__
