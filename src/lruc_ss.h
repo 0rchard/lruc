@@ -3,7 +3,7 @@
 
 #include "lruc.h"
 
-lruc_t lruc_new_ss(unsigned int bsize, unsigned int max);
+lruc_t lruc_ss_new(unsigned int bsize, unsigned int max);
 
 int lruc_ss_insert(lruc_t, const char* key, const char* value);
 

@@ -1,7 +1,9 @@
 #include "lruc_ss.h"
+#include "lruc_imp.h"
 
 #include <stdlib.h>
 #include <string.h>
+#include <stdio.h>
 
 void _lruc_ss_destroy(char** key, char** value){
     free(*key);
@@ -16,7 +18,7 @@ int _lruc_ss_hash(char** key){
     return 0;
 }
 
-lruc_t lruc_new_ss(unsigned int bsize, unsigned int max){
+lruc_t lruc_ss_new(unsigned int bsize, unsigned int max){
     return lruc_new(NULL, 
             (hash_f*)_lruc_ss_hash, 
             (comp_f*)_lruc_ss_comp, 
@@ -36,17 +38,16 @@ int lruc_ss_insert(lruc_t lruc, const char* key, const char* value){
     *((char**)LRUC_NODE_KEY(lruc, node)) = strdup(key);
     *((char**)LRUC_NODE_VALUE(lruc, node)) = strdup(value);
 
-
     return lruc_insert_node(lruc, node);
 }
 
 const char* lruc_ss_find(lruc_t lruc, const char* key){
 
-    lruc_node_t node = lruc_find(lruc, &key);
+    lruc_node_t node = lruc_find_node(lruc, &key);
 
     if(node == NULL){
         return NULL;
     }
 
-    return *((char**)LRUC_NODE_VALUE(lruc, node));
+    return *((const char**)LRUC_NODE_VALUE(lruc, node));
 }
