@@ -6,7 +6,7 @@
 void* lruc_node_key(lruc_t lruc, lruc_node_t node){
     LRUC_DEBUG_CHECK(lruc);
     LRUC_DEBUG_CHECK_NODE(lruc, node);
-    
+
     return LRUC_NODE_KEY(lruc, node);
 }
 
@@ -91,13 +91,13 @@ lruc_t lruc_new(lruc_alloc_t alloc, hash_f *hash, comp_f *comp, destroy_f *destr
 
 void lruc_set_cookie(lruc_t lruc, void* cookie){
     LRUC_DEBUG_CHECK(lruc);
-   
+
     lruc->cookie = cookie;
 }
 
 void lruc_set_max_size(lruc_t lruc, int max){
     LRUC_DEBUG_CHECK(lruc);
-    
+
     lruc->max = max;
 }
 
@@ -109,6 +109,8 @@ void lruc_free(lruc_t lruc){
     while(!TAILQ_EMPTY(&lruc->fifo)){
         node = TAILQ_FIRST(&lruc->fifo);
         TAILQ_REMOVE(&lruc->fifo, node, queue_link);
+
+        lruc->destroy(LRUC_NODE_KEY(lruc, node), LRUC_NODE_VALUE(lruc, node));
         lruc->alloc->free(lruc->alloc->context, node);
     }
 
@@ -153,30 +155,31 @@ lruc_node_t lruc_walk(lruc_t lruc, walkcb_f *walkcb){
 #endif
 
 it_begin:
-    if(!TAILQ_EMPTY(&lruc->fifo)){
-        TAILQ_FOREACH(node, &lruc->fifo, queue_link){
-            ret = walkcb(lruc, node, LRUC_NODE_KEY(lruc, node), LRUC_NODE_VALUE(lruc, node));
+    TAILQ_FOREACH(node, &(lruc->fifo), queue_link){
+        ret = walkcb(lruc, node, LRUC_NODE_KEY(lruc, node), LRUC_NODE_VALUE(lruc, node));
 
-            if(ret & 0x02){
-                int index = LRUC_HASH_INDEX(lruc, LRUC_NODE_KEY(lruc, node));
+        if(ret & 0x02){
+            int index = LRUC_HASH_INDEX(lruc, LRUC_NODE_KEY(lruc, node));
 
-                TAILQ_REMOVE(&(lruc->bucket[index]), node, bucket_link);
-                TAILQ_REMOVE(&(lruc->fifo), node, queue_link);
+            TAILQ_REMOVE(&(lruc->bucket[index]), node, bucket_link);
+            TAILQ_REMOVE(&(lruc->fifo), node, queue_link);
 
-                lruc->destroy(LRUC_NODE_KEY(lruc, node), LRUC_NODE_VALUE(lruc, node));
-                lruc->alloc->free(lruc->alloc->context, node);
+            lruc->destroy(LRUC_NODE_KEY(lruc, node), LRUC_NODE_VALUE(lruc, node));
+            lruc->alloc->free(lruc->alloc->context, node);
+        }
+        else{
+            prev = node;
+        }
+
+        if(ret & 0x01){
+            break;
+        }
+        else{
+            if(prev == NULL){
+                goto it_begin;
             }
-            else{
-                prev = node;
-            }
-
-            if(ret & 0x01){
-                break;
-            }
-            else{
-                if(prev == NULL){
-                    goto it_begin;
-                }
+            else if(ret & 0x02){
+                node = prev;
             }
         }
     }
@@ -188,29 +191,26 @@ it_begin:
 }
 
 static int _lruc_lower_bound(lruc_t lruc, void* key, int* index, lruc_node_t* pnode){
-    int ret;
     lruc_node_t node;
 
     *index = LRUC_HASH_INDEX(lruc, key);
 
-    if(!TAILQ_EMPTY(&lruc->bucket[*index])){
-        TAILQ_FOREACH(node, &lruc->bucket[*index], bucket_link){
-            ret = lruc->comp(key, LRUC_NODE_KEY(lruc, node));
+    TAILQ_FOREACH(node, &(lruc->bucket[*index]), bucket_link){
+        int ret = lruc->comp(key, LRUC_NODE_KEY(lruc, node));
 
-            if(ret == 0){
-                *pnode = node;
-                break;
-            }
-            else if(ret < 0){
-                *pnode = node;
-            }
-            else{
-                break;
-            }
+        if(ret == 0){
+            *pnode = node;
+            return 0;
+        }
+        else if(ret < 0){
+            break;
+        }
+        else{
+            *pnode = node;
         }
     }
 
-    return ret;
+    return 1;
 }
 
 //add a node into lru
@@ -224,10 +224,8 @@ int lruc_insert(lruc_t lruc, void* key, void*  value){
 
     int ret = _lruc_lower_bound(lruc, key, &index, &onode);
 
-    if(ret == 0 && onode){
-        if(lruc->destroy){
-            lruc->destroy(LRUC_NODE_KEY(lruc, onode), LRUC_NODE_VALUE(lruc, onode));
-        }
+    if(ret == 0){
+        lruc->destroy(LRUC_NODE_KEY(lruc, onode), LRUC_NODE_VALUE(lruc, onode));
 
         memcpy(LRUC_NODE_KEY(lruc, onode), key, lruc->ksize);
         memcpy(LRUC_NODE_VALUE(lruc, onode), value, lruc->vsize);
@@ -237,10 +235,12 @@ int lruc_insert(lruc_t lruc, void* key, void*  value){
     }
 
     if(lruc->count >= lruc->max){
-        nnode = TAILQ_LAST(&lruc->fifo, lruc_node_list_st);
-        
-        TAILQ_REMOVE(&(lruc->bucket[index]), nnode, bucket_link);
-        TAILQ_REMOVE(&lruc->fifo, nnode, queue_link);
+        nnode = TAILQ_LAST(&(lruc->fifo), lruc_node_list_st);
+
+        int rindex = LRUC_HASH_INDEX(lruc, LRUC_NODE_KEY(lruc, nnode));
+
+        TAILQ_REMOVE(&(lruc->bucket[rindex]), nnode, bucket_link);
+        TAILQ_REMOVE(&(lruc->fifo), nnode, queue_link);
 
         lruc->destroy(LRUC_NODE_KEY(lruc, nnode), LRUC_NODE_VALUE(lruc, nnode));
     }
@@ -258,13 +258,13 @@ int lruc_insert(lruc_t lruc, void* key, void*  value){
     memcpy(LRUC_NODE_VALUE(lruc, nnode), value, lruc->vsize);
 
     if(onode == NULL){
-        TAILQ_INSERT_HEAD(&lruc->bucket[index], nnode, bucket_link); 
+        TAILQ_INSERT_HEAD(&(lruc->bucket[index]), nnode, bucket_link); 
     }
     else{
-        TAILQ_INSERT_AFTER(&lruc->bucket[index], onode, nnode, bucket_link);
+        TAILQ_INSERT_AFTER(&(lruc->bucket[index]), onode, nnode, bucket_link);
     }
 
-    TAILQ_INSERT_HEAD(&lruc->fifo, nnode, queue_link);
+    TAILQ_INSERT_HEAD(&(lruc->fifo), nnode, queue_link);
 
     return 0;
 }
@@ -280,10 +280,8 @@ int lruc_insert_node(lruc_t lruc, lruc_node_t node){
 
     int ret = _lruc_lower_bound(lruc, LRUC_NODE_KEY(lruc, node), &index, &onode);
 
-    if(ret == 0 && onode){
-        if(lruc->destroy){
-            lruc->destroy(LRUC_NODE_KEY(lruc, onode), LRUC_NODE_VALUE(lruc, onode));
-        }
+    if(ret == 0){
+        lruc->destroy(LRUC_NODE_KEY(lruc, onode), LRUC_NODE_VALUE(lruc, onode));
 
         memcpy(LRUC_NODE_KEY(lruc, onode), LRUC_NODE_KEY(lruc, node), lruc->ksize);
         memcpy(LRUC_NODE_VALUE(lruc, onode), LRUC_NODE_VALUE(lruc, node), lruc->vsize);
@@ -297,10 +295,13 @@ int lruc_insert_node(lruc_t lruc, lruc_node_t node){
     if(lruc->count >= lruc->max){
         nnode = TAILQ_LAST(&lruc->fifo, lruc_node_list_st);
 
-        TAILQ_REMOVE(&(lruc->bucket[index]), nnode, bucket_link);
-        TAILQ_REMOVE(&lruc->fifo, nnode, queue_link);
+        int rindex = LRUC_HASH_INDEX(lruc, LRUC_NODE_KEY(lruc, nnode));
+
+        TAILQ_REMOVE(&(lruc->bucket[rindex]), nnode, bucket_link);
+        TAILQ_REMOVE(&(lruc->fifo), nnode, queue_link);
 
         lruc->destroy(LRUC_NODE_KEY(lruc, nnode), LRUC_NODE_VALUE(lruc, nnode));
+
         lruc->alloc->free(lruc->alloc->context, nnode);
     }
     else{
@@ -308,19 +309,19 @@ int lruc_insert_node(lruc_t lruc, lruc_node_t node){
     }
 
     if(onode == NULL){
-        TAILQ_INSERT_HEAD(&lruc->bucket[index], node, bucket_link); 
+        TAILQ_INSERT_HEAD(&(lruc->bucket[index]), node, bucket_link); 
     }
     else{
-        TAILQ_INSERT_AFTER(&lruc->bucket[index], onode, node, bucket_link);
+        TAILQ_INSERT_AFTER(&(lruc->bucket[index]), onode, node, bucket_link);
     }
 
-    TAILQ_INSERT_HEAD(&lruc->fifo, node, queue_link);
+    TAILQ_INSERT_HEAD(&(lruc->fifo), node, queue_link);
 
     return 0;
 }
 
 void* lruc_find(lruc_t lruc, void* key){
-     LRUC_DEBUG_CHECK(lruc);
+    LRUC_DEBUG_CHECK(lruc);
 
     lruc_node_t node = NULL;
 
@@ -337,7 +338,7 @@ void* lruc_find(lruc_t lruc, void* key){
 #endif
         return LRUC_NODE_VALUE(lruc, node);
     }
-    
+
     return NULL;
 }
 
@@ -361,7 +362,6 @@ lruc_node_t lruc_find_node(lruc_t lruc, void* key){
 #endif
         return node;
     }
-    
     return NULL;
 }
 
@@ -374,11 +374,13 @@ int lruc_del(lruc_t lruc, void* key){
     int index = 0;
     int ret = _lruc_lower_bound(lruc, key, &index, &node);
 
-    if(ret == 0){
+    if(ret == 0 && node){
         TAILQ_REMOVE(&(lruc->bucket[index]), node, bucket_link);
         TAILQ_REMOVE(&lruc->fifo, node, queue_link);
 
         lruc_free_node(lruc, node);
+
+        lruc->count --;
         return 0;
     }
 
@@ -395,6 +397,8 @@ int lruc_del_node(lruc_t lruc, lruc_node_t node){
     TAILQ_REMOVE(&lruc->fifo, node, queue_link);
 
     lruc_free_node(lruc, node);
+
+    lruc->count --;
 
     return 1;
 } 
