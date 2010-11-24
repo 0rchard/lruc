@@ -14,8 +14,18 @@ int _lruc_ss_comp(char** key, char** value){
    return strcmp(*key, *value); 
 }
 
-int _lruc_ss_hash(char** key){
-    return 0;
+int _lruc_ss_hash(const unsigned char** key){
+    const unsigned char *p = *key;
+    unsigned long h = 0, g;
+
+    for(;*p;p++) {
+        h = (h << 4) + (unsigned long)(*p);
+        if ((g = (h & 0xF0000000UL))!=0)
+            h ^= (g >> 24);
+        h &= ~g;
+    }
+
+    return (int)h;
 }
 
 lruc_t lruc_ss_new(unsigned int bsize, unsigned int max){
