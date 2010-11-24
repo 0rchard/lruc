@@ -239,6 +239,10 @@ int lruc_insert(lruc_t lruc, void* key, void*  value){
 
         int rindex = LRUC_HASH_INDEX(lruc, LRUC_NODE_KEY(lruc, nnode));
 
+        if(onode == nnode){
+            onode = TAILQ_PREV(onode, lruc_node_list_st, bucket_link);
+        }
+
         TAILQ_REMOVE(&(lruc->bucket[rindex]), nnode, bucket_link);
         TAILQ_REMOVE(&(lruc->fifo), nnode, queue_link);
 
@@ -296,6 +300,10 @@ int lruc_insert_node(lruc_t lruc, lruc_node_t node){
         nnode = TAILQ_LAST(&lruc->fifo, lruc_node_list_st);
 
         int rindex = LRUC_HASH_INDEX(lruc, LRUC_NODE_KEY(lruc, nnode));
+
+        if(onode == nnode){
+            onode = TAILQ_PREV(onode, lruc_node_list_st, bucket_link);
+        }
 
         TAILQ_REMOVE(&(lruc->bucket[rindex]), nnode, bucket_link);
         TAILQ_REMOVE(&(lruc->fifo), nnode, queue_link);
