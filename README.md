@@ -7,7 +7,9 @@ Example:
 
 #include "lruc_ss.h"
 #include <stdio.h>
+
 int main(){
+
     lruc_t lruc = lruc_ss_new(64, 128);
     lruc_ss_insert(lruc, "fan", "abcd");
     const char* v = lruc_ss_find(lruc, "fan");
