@@ -6,7 +6,7 @@ Example:
 
 
 #include "lruc_ss.h"
-#include <stdio.h>
+#include "stdio.h"
 
 int main(){
 
